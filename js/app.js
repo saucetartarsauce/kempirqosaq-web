@@ -161,8 +161,8 @@ async function speak(list){
     if (id !== speakSeq) return;
     if (!text) continue;
     const l = l0 || S.lang;
-    if (Clips.has(text, l)) await Clips.play(text, l, S.rate, onstart);
-    else await ttsSay(text, l, onstart);
+    if (Clips.has(text, l) && await Clips.play(text, l, S.rate, onstart)) continue;
+    await ttsSay(text, l, onstart);
   }
 }
 const say = (text, l) => speak([[text, l]]);

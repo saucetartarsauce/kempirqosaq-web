@@ -53,16 +53,18 @@ const Clips = {
     a.src = `audio/${l}/${Object.values(this.m[l])[0]}.mp3`;
     a.volume = 0; a.play().then(() => { a.pause(); a.volume = 1; }).catch(() => { a.volume = 1; });
   },
+  // resolves true when the clip played, false if it could not (missing file, blocked) — caller then uses the system voice
   play(text, l, rate, onstart){
     return new Promise(done => {
       const a = this.audio();
-      a.onended = a.onerror = () => done();
+      a.onended = () => done(true);
+      a.onerror = () => done(false);
       a.src = this.url(text, l);
       a.preservesPitch = true;
       a.playbackRate = Math.max(0.5, Math.min(2, rate / ((this.m && this.m.rate) || 0.85)));
       a.volume = 1;
       const p = a.play();
-      if (p) p.then(() => onstart && onstart()).catch(() => done()); else if (onstart) onstart();
+      if (p) p.then(() => onstart && onstart()).catch(() => done(false)); else if (onstart) onstart();
     });
   },
   stop(){ if (this.el) { this.el.onended = this.el.onerror = null; this.el.pause(); } }

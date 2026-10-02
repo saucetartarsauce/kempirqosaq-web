@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Сөйле! — казахский для жизни</title>
+<meta name="description" content="Казахский язык для взрослых: работа, быт, гости, тосты. Каждое слово и фраза озвучены носителем языка.">
+<meta name="theme-color" content="#F6F4EE" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#11161C" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Сөйле!">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="#/" aria-label="Сөйле! — на главную">
+    <img src="icons/icon-192.png" alt="" width="36" height="36">
+    <span><b>Сөйле!</b><small>казахский для жизни</small></span>
+  </a>
+  <label class="search"><span class="sr">Поиск</span>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg>
+    <input id="q" type="search" placeholder="Поиск: «спасибо», «рақмет»" autocomplete="off" enterkeyhint="search">
+  </label>
+  <a class="favlink" href="#/fav" aria-label="Избранное"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg><span id="favn"></span></a>
+</header>
+<main id="app" class="wrap"></main>
+<div id="player" class="player" hidden></div>
+<script src="js/text.js"></script>
+<script src="js/data.js"></script>
+<script src="audio/manifest.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

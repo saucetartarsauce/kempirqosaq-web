@@ -6,7 +6,7 @@ const LFLAG = { kk:'KZ', ru:'RU', en:'GB' };
 
 /* ---------- state ---------- */
 const S = (() => {
-  const d = { lang:'kk', name:'', tr:true, rate:0.85, all:false, stars:{}, voice:{} };
+  const d = { lang:'kk', name:'', tr:true, rate:0.8, all:false, stars:{}, voice:{}, coins:0, seen:{}, giftShown:0, stress:true };
   const j = Store.load(); if (j) Object.assign(d, j);
   return d;
 })();
@@ -23,6 +23,27 @@ const pick = a => a[rnd(a.length)];
 const fmt = (s, v={}) => s.replace(/\{(\w+)\}/g, (_,k) => v[k] ?? '');
 const flagEmoji = c => String.fromCodePoint(...[...c].map(ch => 0x1F1E6 + ch.charCodeAt(0) - 65));
 const cap1 = s => s.charAt(0).toUpperCase() + s.slice(1);
+/* show stress marks on Russian words (like in Russian school primers) */
+function stressToken(tok){
+  const plain = tok.replace(/-/g, '').toLowerCase();
+  const idx = STRESS_RU[plain];
+  if (idx == null) return esc(tok);
+  let k = -1, out = '';
+  for (const ch of tok) { if (ch !== '-') k++; out += (ch !== '-' && k === idx) ? `<span class="st">${esc(ch)}</span>` : esc(ch); }
+  return out;
+}
+function rt(text, lang = S.lang){
+  text = String(text ?? '');
+  if (lang !== 'ru' || !S.stress) return esc(text);
+  let out = '', last = 0;
+  text.replace(/[А-Яа-яЁё-]+/g, (m, off) => { out += esc(text.slice(last, off)) + stressToken(m); last = off + m.length; return m; });
+  return out + esc(text.slice(last));
+}
+function rtParts(parts, lang = S.lang){
+  if (lang !== 'ru' || !S.stress) return parts.map(esc);
+  const idx = STRESS_RU[parts.join('').toLowerCase()]; let off = 0;
+  return parts.map(p => { let h = ''; for (let i = 0; i < p.length; i++) h += (idx === off + i) ? `<span class="st">${esc(p[i])}</span>` : esc(p[i]); off += p.length; return h; });
+}
 
 /* ---------- UI strings [kk, ru, en] ---------- */
 const UI = {
@@ -30,7 +51,7 @@ const UI = {
   hi:['Сәлем, {n}!','Привет, {n}!','Hi, {n}!'],
   friend:['досым','друг','friend'],
   hiSub:['Бүгін не үйренеміз? Тақырыпты таңда!','Что будем учить сегодня? Выбери тему!','What shall we learn today? Pick a topic!'],
-  secRead:['Оқу','Чтение','Reading'], secMath:['Математика','Математика','Math'], secWorld:['Қоршаған әлем','Мир вокруг','The world'],
+  secRead:['Оқу','Чтение','Reading'], secMath:['Математика','Математика','Math'], secWorld:['Қоршаған әлем','Мир вокруг','The world'], secKnow:['Дүниетану','Познание мира','Discover the world'],
   level:['Деңгей','Уровень','Level'], levels:['деңгей','уровней','levels'],
   learnHint:['Карточканы бас та, тыңда!','Нажимай на карточки и слушай!','Tap the cards and listen!'],
   playAll:['Барлығын тыңда','Слушать всё','Listen to all'],
@@ -59,9 +80,11 @@ const UI = {
   close:['Дайын','Готово','Done'],
   noVoice:['дауыс жоқ','нет голоса','no voice'],
   kkNote:[
-    'Бұл құрылғыда қазақ дауысы жоқ, сондықтан қазақ сөздерін орыс дауысы оқиды. Компьютерде қолданбаны Microsoft Edge браузерінде ашыңыз: онда Айгүл мен Дәулет есімді қазақ дауыстары бар. iPhone-да әзірге қазақ дауысы жоқ.',
-    'На этом устройстве нет казахского голоса, поэтому казахские слова читает русский голос. На компьютере откройте приложение в браузере Microsoft Edge: там есть казахские голоса Айгуль и Даулет. На iPhone казахского голоса пока нет.',
-    'This device has no Kazakh voice, so a Russian voice reads Kazakh words. On a computer, open the app in Microsoft Edge: it has Kazakh voices Aigul and Daulet. iPhone has no Kazakh voice yet.'],
+    'Бұл құрылғыда қазақ дауысы жоқ. Қазақ сөздерін {v} оқиды. Ең жақсы нұсқа — компьютерде Microsoft Edge браузері: онда Айгүл мен Дәулет есімді қазақ дауыстары бар.',
+    'На этом устройстве нет казахского голоса. Казахские слова читает {v}. Лучший вариант — браузер Microsoft Edge на компьютере: там есть казахские голоса Айгуль и Даулет.',
+    'This device has no Kazakh voice. Kazakh words are read by {v}. The best option is Microsoft Edge on a computer: it has the Kazakh voices Aigul and Daulet.'],
+  viaTr:['түрік дауысы (ол қазақшаға ең жақын, екпіні дұрыс)','турецкий голос (он ближе всего к казахскому произношению и ставит ударение правильно)','a Turkish voice (the closest to Kazakh pronunciation)'],
+  viaRu:['орыс дауысы (акцентпен). Құрылғыға түрік дауысын қосыңыз','русский голос (с акцентом). Добавьте на устройство турецкий голос','a Russian voice (with an accent). Add a Turkish voice to the device'],
   kkOk:['Қазақ дауысы бар: {v}','Казахский голос найден: {v}','Kazakh voice found: {v}'],
   kkRec:['Қазақ дауысы алдын ала жазылған ({n} фраза). Жүйелік дауыс тек жазбасы жоқ сөздерге (мысалы, баланың атына) керек.','Казахский голос записан заранее ({n} фраз). Системный голос нужен только для слов без записи (например, имени ребёнка).','Kazakh voice is pre-recorded ({n} phrases). The system voice is only used for words without a recording (e.g. the child’s name).'],
   hello:['Сәлем!','Привет!','Hi!'],
@@ -69,6 +92,16 @@ const UI = {
   fruit:['Жеміс','Фрукт','Fruit'], vegetable:['Көкөніс','Овощ','Vegetable'],
   allIn:['Барлығы','Всё вместе','All together'],
   stars:['жұлдыз','звёзд','stars'],
+  coins:['ұпай','баллы','points'],
+  gifts:['Менің сыйлықтарым','Мои подарки','My gifts'],
+  giftNew:['Сыйлық! Жарайсың!','Подарок! Молодец!','A gift! Well done!'],
+  toNext:['Келесі сыйлыққа дейін: {n}','До следующего подарка: {n}','Next gift in: {n}'],
+  giftHint:['Әр дұрыс жауап үшін ұпай жина! Әр 100 ұпай — жаңа сыйлық.','Собирай баллы за каждое правильное слово! Каждые 100 баллов — новый подарок.','Collect points for every right answer! Every 100 points is a new gift.'],
+  giftsGot:['Жиналды: {a} / {b}','Собрано: {a} из {b}','Collected: {a} of {b}'],
+  bonus:['Сыйлық ұпай: +{n}','Бонус за уровень: +{n}','Level bonus: +{n}'],
+  showStress:['Орыс сөздерінде екпінді көрсету','Показывать ударения в русских словах','Show stress marks in Russian words'],
+  slowBtn:['Баяу','Медленно','Slowly'],
+  iosTip:['iPhone-да дауыс анығырақ болуы үшін: Баптаулар → Арнайы мүмкіндіктер → Ауызша мазмұн → Дауыстар. «Жақсартылған» орыс және ағылшын дауыстарын жүктеп алыңыз.','Чтобы голос на iPhone звучал чётче: Настройки → Универсальный доступ → Устное содержимое → Голоса. Скачайте русский и английский голос с пометкой «улучшенный».','For a clearer voice on iPhone: Settings → Accessibility → Spoken Content → Voices. Download the Russian and English voices marked "Enhanced".'],
   progress:['Жұлдыздар әр тілде бөлек санайды.','Звёзды считаются отдельно для каждого языка.','Stars are counted separately for each language.']
 };
 const t = (k, v) => fmt(tr(UI[k]), v);
@@ -120,9 +153,23 @@ function voicesFor(l){ return VOICES.filter(v => vLang(v).startsWith(l)); }
 function voiceFor(l){
   const list = voicesFor(l);
   if (S.voice[l]) { const v = list.find(v => v.name === S.voice[l]); if (v) return v; }
-  const score = v => (/natural|neural|online|premium|enhanced/i.test(v.name) ? 3 : 0) + (/google/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1)
+  const score = v => (/natural|neural/i.test(v.name) ? 5 : 0) + (/online|premium|enhanced|улучш|siri/i.test(v.name) ? 3 : 0) + (/google/i.test(v.name) ? 2 : 0) + (v.localService ? 0 : 1) - (/compact|espeak/i.test(v.name) ? 3 : 0)
     + (l === 'en' && /en-us/.test(vLang(v)) ? 1 : 0);
   return list.slice().sort((a,b) => score(b) - score(a))[0] || null;
+}
+const KK2TR = { 'а':'a','ә':'e','б':'b','в':'v','г':'g','ғ':'g','д':'d','е':'e','ё':'yo','ж':'j','з':'z','и':'i','й':'y','к':'k','қ':'k','л':'l','м':'m','н':'n','ң':'ng','о':'o','ө':'ö','п':'p','р':'r','с':'s','т':'t','у':'u','ұ':'u','ү':'ü','ф':'f','х':'h','һ':'h','ц':'ts','ч':'ç','ш':'ş','щ':'ş','ъ':'','ы':'ı','і':'i','ь':'','э':'e','ю':'yu','я':'ya' };
+// Kazakh written in Turkish letters: Turkish is a related Turkic language with the same vowels (ө, ү, ы) and final-syllable stress
+function kk2tr(text){
+  return String(text).replace(/[А-Яа-яЁёӘәҒғҚқҢңӨөҰұҮүҺһІі]+/g, w => {
+    let out = '';
+    [...w].forEach((ch, i) => {
+      const lo = ch.toLowerCase(); let m = KK2TR[lo]; if (m == null) { out += ch; return; }
+      if (lo === 'е' && i === 0) m = 'ye';
+      if (ch !== lo && m) m = m.charAt(0).toLocaleUpperCase('tr') + m.slice(1);
+      out += m;
+    });
+    return out;
+  });
 }
 const KK2RU = { 'ә':'э','Ә':'Э','ө':'ё','Ө':'Ё','ү':'ю','Ү':'Ю','ұ':'у','Ұ':'У','қ':'к','Қ':'К','ғ':'г','Ғ':'Г','ң':'нг','Ң':'НГ','і':'и','І':'И','һ':'х','Һ':'Х' };
 const LETTER_SAY = { kk:{'ъ':'жуан белгі','ь':'жіңішке белгі'}, ru:{'ъ':'твёрдый знак','ь':'мягкий знак','й':'и краткое'} };
@@ -135,24 +182,30 @@ function unlockAudio(){
 }
 document.addEventListener('pointerdown', () => { try { if (AC && AC.state === 'suspended') AC.resume(); } catch(e) {} }, true);
 // system voice — used only for phrases that have no pre-recorded clip (e.g. the child's name)
-function ttsSay(text, l, onstart){
+function ttsSay(text, l, onstart, opt = {}){
   return new Promise(done => {
     if (!('speechSynthesis' in window)) return done();
     let v = voiceFor(l), txt = String(text), lang = LOC[l];
-    if (!v && l === 'kk') { v = voiceFor('ru'); lang = 'ru-RU'; txt = txt.replace(/[әӘөӨүҮұҰқҚғҒңҢіІһҺ]/g, c => KK2RU[c]); }
+    if (!v && l === 'kk') {
+      const trv = voiceFor('tr');
+      if (trv) { v = trv; lang = 'tr-TR'; txt = kk2tr(txt); }
+      else { v = voiceFor('ru'); lang = 'ru-RU'; txt = txt.replace(/[әӘөӨүҮұҰқҚғҒңҢіІһҺ]/g, c => KK2RU[c]); }
+    }
     const u = new SpeechSynthesisUtterance(txt);
     if (v) { u.voice = v; u.lang = v.lang; } else u.lang = lang;
-    u.rate = S.rate; u.pitch = 1.08;
+    u.rate = speechRate(txt, opt); u.pitch = 1;
     if (onstart) u.onstart = onstart;
     // some engines never fire onend — don't let the queue hang
-    const guard = setTimeout(done, 2500 + txt.length * 160 / S.rate);
+    const guard = setTimeout(done, 2500 + txt.length * 160 / u.rate);
     u.onend = u.onerror = () => { clearTimeout(guard); done(); };
     speechSynthesis.speak(u);
   });
 }
+// single words are read a little slower so every sound is clear; 🐢 / a second tap reads slower still
+const speechRate = (text, opt = {}) => Math.max(0.5, S.rate * (/\s/.test(String(text).trim()) ? 1 : 0.92) * (opt.slow ? 0.7 : 1));
 // list: [[text, lang, onstart?], ...] — played one after another; a new call interrupts the old one
 let speakSeq = 0;
-async function speak(list){
+async function speak(list, opt = {}){
   if (!Array.isArray(list[0])) list = [list];
   const id = ++speakSeq;
   Clips.stop();
@@ -161,8 +214,8 @@ async function speak(list){
     if (id !== speakSeq) return;
     if (!text) continue;
     const l = l0 || S.lang;
-    if (Clips.has(text, l) && await Clips.play(text, l, S.rate, onstart)) continue;
-    await ttsSay(text, l, onstart);
+    if (Clips.has(text, l) && await Clips.play(text, l, speechRate(text, opt), onstart)) continue;
+    await ttsSay(text, l, onstart, opt);
   }
 }
 const say = (text, l) => speak([[text, l]]);
@@ -186,7 +239,7 @@ const sfxWin = () => { [523,659,784,1047,1319].forEach((f,i) => tone(f, i*.11, .
 const RAINBOW = ['#FF4D5E','#FF9A1F','#FFD23F','#3DCB8A','#27BEF0','#5574F7','#A35BFF'];
 function confetti(n=90){
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-  const c = $('#fx'); const x = c.getContext('2d');
+  const c = $('#fx2'); const x = c.getContext('2d');
   c.width = innerWidth * devicePixelRatio; c.height = innerHeight * devicePixelRatio;
   const parts = Array.from({length:n}, () => ({ x: innerWidth/2 + (Math.random()-.5)*innerWidth*.4, y: innerHeight*.45, vx:(Math.random()-.5)*14, vy: -Math.random()*14-4, r: Math.random()*6+4, c: pick(RAINBOW), a: Math.random()*6, s:(Math.random()-.5)*.3 }));
   let f = 0;
@@ -195,6 +248,108 @@ function confetti(n=90){
     for (const q of parts) { q.vy += .45; q.x += q.vx; q.y += q.vy; q.a += q.s; x.save(); x.translate(q.x,q.y); x.rotate(q.a); x.fillStyle = q.c; x.fillRect(-q.r,-q.r/2,q.r*2,q.r); x.restore(); }
     if (++f < 110) requestAnimationFrame(tick); else x.clearRect(0,0,innerWidth,innerHeight);
   })();
+}
+
+/* ---------- points, gifts, fireworks ---------- */
+const GIFT_STEP = 100;
+const STICKERS = ['🦄','🐶','🐱','🐼','🦊','🐯','🐸','🐵','🐧','🦉','🦋','🐬','🐳','🦖','🐉','🌈','⭐','🌙','☀️','🍭','🍦','🧁','🎈','🎀','👑','💎','🚀','🛸','🎠','🏰','🧸','🪁','🎨','🎹','🥁','⚽','🏆','🌸','🐞','🦜','🐢','🐙','🍉','🎂','🌻','🧚','🦕','🐠','🎁','🪅'];
+function seenKey(c){ const w = c.w ? c.w[2] : (c.label || (c.pic && (c.pic.letter || c.pic.text)) || ''); return w ? S.lang + ':' + V_.topic + ':' + w : null; }
+function addCoins(n, fromEl){
+  if (!n) return;
+  S.coins += n; save();
+  const pill = $('.coinpill'), num = $('#coinN');
+  const r = fromEl && fromEl.getBoundingClientRect ? fromEl.getBoundingClientRect() : { left: innerWidth/2, top: innerHeight/2, width: 0, height: 0 };
+  const sx = r.left + r.width/2, sy = r.top + r.height/2;
+  const f = document.createElement('div'); f.className = 'coinfly'; f.innerHTML = `+${n} <span class="emo">🪙</span>`;
+  f.style.left = sx + 'px'; f.style.top = sy + 'px';
+  document.body.appendChild(f);
+  const tgt = pill ? pill.getBoundingClientRect() : { left: innerWidth - 90, top: -40, width: 60, height: 30 };
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    f.style.transform = `translate(calc(-50% + ${tgt.left + tgt.width/2 - sx}px), calc(-50% + ${tgt.top + tgt.height/2 - sy}px)) scale(.55)`;
+    f.style.opacity = '0.15';
+  }));
+  setTimeout(() => {
+    f.remove();
+    if (num) { num.textContent = S.coins; pill.classList.remove('bump'); void pill.offsetWidth; pill.classList.add('bump'); }
+    tone(1568, 0, .08, 'square', .04); tone(2093, .06, .14, 'square', .04);
+  }, 800);
+}
+const giftsEarned = () => Math.min(STICKERS.length, Math.floor(S.coins / GIFT_STEP));
+function showGiftIfAny(){
+  if (S.giftShown >= giftsEarned()) return;
+  const st = STICKERS[S.giftShown]; S.giftShown++; save();
+  let g = $('#giftbox'); if (!g) { g = document.createElement('div'); g.id = 'giftbox'; document.body.appendChild(g); }
+  g.innerHTML = `<div class="scrim" data-act="closegift"></div><div class="giftcard" role="dialog" aria-modal="true">
+    <div class="box"><span class="emo lid">🎁</span><span class="emo prize">${st}</span></div>
+    <h2>${esc(t('giftNew'))}</h2><button class="btn big go" data-act="closegift"><span class="emo">👍</span></button></div>`;
+  g.hidden = false; fireworks(12); sfxWin(); say(t('giftNew'));
+}
+function renderGifts(){
+  const got = giftsEarned(), left = GIFT_STEP - (S.coins % GIFT_STEP);
+  app().innerHTML = header() + `<main class="wrap gifts">
+    <div class="tophead"><button class="btn ghost" data-act="giftsback">← ${esc(t('back'))}</button><h1><span class="emo">🎁</span> ${esc(t('gifts'))}</h1></div>
+    <section class="coinbank">
+      <div class="bigcoin"><span class="emo">🪙</span><b>${S.coins}</b><small>${esc(t('coins'))}</small></div>
+      <div class="nextg"><p>${esc(t('giftHint'))}</p>
+        ${got < STICKERS.length ? `<div class="gbar"><i style="width:${(GIFT_STEP - left) / GIFT_STEP * 100}%"></i></div><p class="gnext">${esc(t('toNext', {n: left}))} <span class="emo">🪙</span></p>` : ''}
+        <p class="gnext">${esc(t('giftsGot', {a: got, b: STICKERS.length}))}</p></div>
+    </section>
+    <div class="album">${STICKERS.map((e, i) => i < got ? `<button class="stk" data-sticker="${i}"><span class="emo">${e}</span></button>` : `<span class="stk lockd"><span class="emo">❔</span></span>`).join('')}</div>
+  </main>`;
+}
+
+/* fireworks: rockets rise and burst into coloured sparks */
+const FW = { parts: [], rockets: [], running: false };
+function fwLoop(){
+  const c = $('#fx'), x = c.getContext('2d');
+  if (c.width !== Math.round(innerWidth * devicePixelRatio)) { c.width = Math.round(innerWidth * devicePixelRatio); c.height = Math.round(innerHeight * devicePixelRatio); }
+  x.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
+  x.clearRect(0, 0, innerWidth, innerHeight);
+  for (const r of FW.rockets) {
+    r.y += r.vy; r.vy += 0.12; r.t--;
+    r.trail.push([r.x, r.y]); if (r.trail.length > 8) r.trail.shift();
+    r.trail.forEach(([tx, ty], i) => { x.globalAlpha = i / 10; x.fillStyle = '#FFB347'; x.beginPath(); x.arc(tx, ty, 2, 0, 7); x.fill(); });
+    x.globalAlpha = 1; x.fillStyle = '#FFF3B0'; x.beginPath(); x.arc(r.x, r.y, 3, 0, 7); x.fill();
+    if (r.vy >= -0.8 || r.t <= 0) { r.done = true; burst(r.x, r.y, 90); sfxPop(); }
+  }
+  FW.rockets = FW.rockets.filter(r => !r.done);
+  for (const p of FW.parts) {
+    p.vx *= 0.982; p.vy = p.vy * 0.982 + 0.055; p.x += p.vx; p.y += p.vy; p.life -= p.decay;
+    x.globalAlpha = Math.max(0, p.life); x.fillStyle = p.c;
+    x.beginPath(); x.arc(p.x, p.y, p.r * (0.5 + p.life * 0.7), 0, 7); x.fill();
+    if (p.life > 0.5 && Math.random() < 0.08) { x.fillStyle = '#fff'; x.beginPath(); x.arc(p.x, p.y, 1.2, 0, 7); x.fill(); }
+  }
+  x.globalAlpha = 1;
+  FW.parts = FW.parts.filter(p => p.life > 0);
+  if (FW.parts.length || FW.rockets.length) requestAnimationFrame(fwLoop);
+  else { FW.running = false; x.clearRect(0, 0, innerWidth, innerHeight); }
+}
+function fwStart(){ if (!FW.running) { FW.running = true; requestAnimationFrame(fwLoop); } }
+function burst(cx, cy, n = 80, small = false){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const col = pick(RAINBOW), col2 = pick(RAINBOW), sp = small ? 3 : 5.5;
+  for (let i = 0; i < n; i++) {
+    const a = Math.PI * 2 * i / n + Math.random() * 0.2, v = sp * (0.45 + Math.random() * 0.75);
+    FW.parts.push({ x: cx, y: cy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, r: small ? 2.3 : 3, c: Math.random() < 0.5 ? col : col2, life: 1, decay: 0.012 + Math.random() * 0.012 });
+  }
+  fwStart();
+}
+function fireworks(n = 8){
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (let i = 0; i < n; i++) setTimeout(() => {
+    FW.rockets.push({ x: innerWidth * (0.12 + Math.random() * 0.76), y: innerHeight + 10, vy: -Math.sqrt(2 * 0.12 * innerHeight * (0.45 + Math.random() * 0.3)), t: 160, trail: [] });
+    fwStart();
+  }, i * 280);
+}
+function sfxPop(){
+  if (!AC) return;
+  try {
+    const len = Math.floor(AC.sampleRate * 0.35), b = AC.createBuffer(1, len, AC.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3);
+    const s = AC.createBufferSource(), g = AC.createGain(), f = AC.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 1800; g.gain.value = 0.2;
+    s.buffer = b; s.connect(f).connect(g).connect(AC.destination); s.start();
+  } catch(e) {}
 }
 
 /* ---------- items & pictures ---------- */
@@ -207,7 +362,7 @@ function picHTML(pc, cls=''){
   if (pc.color) return `<span class="swatch ${cls}" style="--c:${pc.color}"></span>`;
   if (pc.planet) return `<span class="planet pl-${pc.planet} ${cls}"><i></i></span>`;
   if (pc.letter) return `<span class="bigletter ${cls}">${pc.letter}</span>`;
-  if (pc.text) return `<span class="bigtext ${cls}">${esc(pc.text)}</span>`;
+  if (pc.text) return `<span class="bigtext ${cls}">${rt(pc.text)}</span>`;
   if (pc.count) return `<span class="countbox ${cls}">${Array.from({length:pc.count}, () => `<span class="emo">${pc.ce}</span>`).join('')}</span>`;
   if (pc.num != null) return `<span class="numpic ${cls}"><b>${pc.num}</b>${pc.num>0 && pc.num<=10 ? `<span class="dots">${Array.from({length:pc.num},()=>`<span class="emo">${pc.ce}</span>`).join('')}</span>` : ''}</span>`;
   if (pc.eq) return eqHTML(pc.eq);
@@ -622,8 +777,97 @@ T('home', 'world', '🏠', ['Үй заттары','Предметы дома','T
   { t:['Мектеп заттары','Школьные вещи','School things'], items: fromV(V.school) }
 ]));
 
-const SECTIONS = [['read','secRead','🔤'],['math','secMath','🔢'],['world','secWorld','🌍']];
-const TCOL = { abc:0, syl:1, sent:2, num:3, add:4, mul:5, logic:6, flags:0, caps:1, seas:4, space:6, animals:2, fv:0, food:1, plants:3, colors:6, body:0, home:5 };
+/* ===== Познание мира (Дүниетану) ===== */
+const KP = {
+  seasonOf:['{x} — жылдың қай мезгілі?','{x} — какое это время года?','{x} — which season is it?'],
+  nextMonth:['{x} — келесі ай қайсы?','{x}. А какой месяц следующий?','What month comes after {x}?'],
+  nextDay:['{x} — келесі күн қайсы?','{x}. А какой день следующий?','What day comes after {x}?'],
+  ordMonth:['{o} ай','{o} месяц','the {o} month'],
+  ordDay:['аптаның {o} күні','{o} день недели','the {o} day of the week']
+};
+const kp = (k, v) => fmt(tr(KP[k]), v);
+const rich = r => ({ pic:{e:r[0]}, w:[r[1], r[2], r[3]], key:r[3], sub: r[4] ? [r[4], r[5], r[6]] : undefined });
+// a text question with fixed answer and distractor labels
+function qText(prompt, answer, wrong, extra = {}){
+  const opts = shuffle([{ label: answer, ok: true, say: answer }, ...wrong.map(w => ({ label: w, ok: false, say: w }))]);
+  return { prompt, speak: prompt, mode:'text', options: opts, ...extra };
+}
+
+T('seasons', 'know', '🍂', ['Жыл мезгілдері мен айлар','Времена года и месяцы','Seasons and months'], () => {
+  const se = SEASONS.map(r => (x => (x.grp = 0, x))(rich(r)));
+  const months = () => MONTHS[S.lang];
+  const mCards = () => months().map((m, i) => ({ pic:{e: SEASONS[MONTH_SEASON[i]][0]}, w: LANGS.map(l => MONTHS[l][i]), sub: LANGS.map(l => fmt(KP.ordMonth[LANGS.indexOf(l)], { o: ORD[l][i] })) }));
+  const seasonQ = i => { const it = se[MONTH_SEASON[i]], x = months()[i];
+    return { prompt: kp('seasonOf', {x: cap1(x)}), speak: kp('seasonOf', {x}), mode:'both', options: shuffle(se).map(o => optFrom(o, o === it, 'both')) }; };
+  const nextQ = i => { const M = months(), a = M[(i + 1) % 12];
+    return qText(kp('nextMonth', {x: cap1(M[i])}), a, shuffle(M.filter(m => m !== a && m !== M[i])).slice(0, 3)); };
+  const ridQ = r => { const M = months(); return qText(tr(r), M[r[3]], shuffle(M.filter((_, k) => k !== r[3])).slice(0, 3)); };
+  const countQ = r => { const q = qText(tr(r), String(r[3]), r[4].filter(v => v !== r[3]).map(String)); q.mode = 'num'; q.options.forEach(o => o.say = numWord(+o.label, S.lang)); return q; };
+  return [
+    { t:['Жыл мезгілдері','Времена года','Seasons'], learn: () => se.map(cardOf), quiz: () => [...shuffle(se).map(it => qHear(it, se, 3)), ...shuffle(se).map(it => qSee(it, se, 4))] },
+    { t:['Айлар','Месяцы','Months'], learn: mCards, quiz: () => shuffle([...Array(12).keys()]).slice(0, N_Q).map((i, k) => k % 2 ? nextQ(i) : seasonQ(i)) },
+    { t:['Жұмбақтар','Загадки','Riddles'], learn: null, quiz: () => shuffle([...KRID.months.map(ridQ), ...KRID.counts.map(countQ)]) }
+  ];
+});
+
+T('days', 'know', '📅', ['Апта күндері және тәулік','Дни недели и время суток','Days and times of day'], () => {
+  const parts = DAYPARTS.map(r => (x => (x.grp = 0, x))(rich(r)));
+  const D = () => DAYS[S.lang];
+  const dCards = () => D().map((d, i) => ({ pic:{e: KEYCAPS[i]}, w: LANGS.map(l => DAYS[l][i]), sub: LANGS.map(l => fmt(KP.ordDay[LANGS.indexOf(l)], { o: ORD[l][i] })) }));
+  const nextQ = i => { const W = D(), a = W[(i + 1) % 7]; return qText(kp('nextDay', {x: cap1(W[i])}), a, shuffle(W.filter(d => d !== a && d !== W[i])).slice(0, 3)); };
+  const ridQ = r => { const W = D(); return qText(tr(r), W[r[3]], shuffle(W.filter((_, k) => k !== r[3])).slice(0, 3)); };
+  return [
+    { t:['Апта күндері','Дни недели','Days of the week'], learn: dCards, quiz: () => [...shuffle([...Array(7).keys()]).slice(0, 5).map(nextQ), ...shuffle(KRID.days).slice(0, 3).map(ridQ)] },
+    { t:['Тәулік бөліктері','Время суток','Times of day'], learn: () => parts.map(cardOf), quiz: () => [...shuffle(parts).map(it => qHear(it, parts, 3)), ...KRID.dayparts.map(r => qRiddle(r, parts))] },
+    { t:['Жұмбақтар','Загадки','Riddles'], learn: null, quiz: () => shuffle([...shuffle([...Array(7).keys()]).slice(0, 3).map(nextQ), ...KRID.days.map(ridQ), ...shuffle(KRID.dayparts).slice(0, 2).map(r => qRiddle(r, parts))]) }
+  ];
+});
+
+T('weather', 'know', '🌦️', ['Ауа райы және киім','Погода и одежда','Weather and clothes'], () => vocabLevels([
+  { t:['Ауа райы','Погода','Weather'], items: fromV(KNOW.weather) },
+  { t:['Киім','Одежда','Clothes'], items: fromV(KNOW.clothes) }
+], { mixedT: ['Не киеміз?','Что наденем?','What do we wear?'], riddles: KRID.clothes }));
+
+T('family', 'know', '👨‍👩‍👧', ['Отбасы және сыпайы сөздер','Семья и вежливые слова','Family and polite words'], () => vocabLevels([
+  { t:['Менің отбасым','Моя семья','My family'], items: fromV(KNOW.family) },
+  { t:['Сыпайы сөздер','Вежливые слова','Polite words'], items: fromV(KNOW.polite) }
+], { mixedT: ['Жұмбақтар','Загадки','Riddles'], riddles: KRID.family }));
+
+T('jobs', 'know', '🧑‍🚒', ['Мамандықтар','Профессии','Jobs'], () => {
+  const it = fromV(KNOW.jobs);
+  return vocabLevels([
+    { t:['Мамандықтар · 1','Профессии · 1','Jobs · 1'], items: it.slice(0, 7) },
+    { t:['Мамандықтар · 2','Профессии · 2','Jobs · 2'], items: it.slice(7) }
+  ], { mixedT: ['Жұмбақтар','Загадки','Riddles'], riddles: KRID.jobs });
+});
+
+T('road', 'know', '🚦', ['Көлік және жол ережесі','Транспорт и правила дороги','Transport and road rules'], () => {
+  const trn = fromV(KNOW.transport).map(x => (x.grp = 0, x));
+  const lights = LIGHTS.map(r => ({ pic:{color:r[0]}, w:[r[1], r[2], r[3]], key:r[4], grp:1 }));
+  const road = [...fromV(KNOW.road).map(x => (x.grp = 1, x)), ...lights];
+  const all = [...trn, ...road];
+  return [
+    { t:['Көлік · 1','Транспорт · 1','Transport · 1'], learn: () => trn.slice(0, 7).map(cardOf), quiz: () => vocabQuiz(trn.slice(0, 7), trn.slice(0, 7), 0) },
+    { t:['Көлік · 2','Транспорт · 2','Transport · 2'], learn: () => trn.slice(7).map(cardOf), quiz: () => vocabQuiz(trn.slice(7), trn, 1) },
+    { t:['Бағдаршам','Светофор','Traffic light'], learn: () => road.map(cardOf), quiz: () => shuffle(KRID.road).map(r => qRiddle(r, all)).concat(shuffle(lights).slice(0, 3).map(it => qHear(it, lights, 3))) },
+    { t:['Жұмбақтар','Загадки','Riddles'], learn: null, quiz: () => shuffle([...KRID.transport, ...KRID.road]).slice(0, N_Q).map(r => qRiddle(r, all)) }
+  ];
+});
+
+T('kz', 'know', '🇰🇿', ['Менің Отаным — Қазақстан','Моя Родина — Казахстан','My homeland — Kazakhstan'], () => {
+  const flag = { pic:{flag:'KZ'}, w:['Қазақстан туы','флаг Казахстана','flag of Kazakhstan'], key:'flag', sub: FLAG_KZ_FACT, grp:0 };
+  const a = [flag, ...KNOW.kz1.map(r => (x => (x.grp = 0, x))(rich(r)))];
+  const b = KNOW.kz2.map(r => (x => (x.grp = 1, x))(rich(r)));
+  const all = [...a, ...b];
+  return [
+    { t:['Рәміздер мен қалалар','Символы и города','Symbols and cities'], learn: () => a.map(cardOf), quiz: () => vocabQuiz(a, a, 0) },
+    { t:['Салт-дәстүр','Традиции','Traditions'], learn: () => b.map(cardOf), quiz: () => vocabQuiz(b, b, 1) },
+    { t:['Жұмбақтар','Загадки','Riddles'], learn: null, quiz: () => shuffle(KRID.kz).map(r => qRiddle(r, all)) }
+  ];
+});
+
+const SECTIONS = [['read','secRead','🔤'],['math','secMath','🔢'],['know','secKnow','🧭'],['world','secWorld','🌍']];
+const TCOL = { seasons:1, days:5, weather:4, family:0, jobs:2, road:3, kz:4, abc:0, syl:1, sent:2, num:3, add:4, mul:5, logic:6, flags:0, caps:1, seas:4, space:6, animals:2, fv:0, food:1, plants:3, colors:6, body:0, home:5 };
 
 /* ---------- progress ---------- */
 const lvKey = (tid, i) => `${S.lang}:${tid}:${i}`;
@@ -646,7 +890,7 @@ function header(){
       <span><b>Кемпірқосақ</b><small>${esc(t('sub'))}</small></span>
     </button>
     <div class="langs" role="group" aria-label="Language">${LANGS.map(l => `<button class="lang ${l === S.lang ? 'on' : ''}" data-lang="${l}"><span class="emo">${flagEmoji(LFLAG[l])}</span>${LNAME[l]}</button>`).join('')}</div>
-    <div class="right"><span class="starpill"><span class="emo">⭐</span>${totalStars()}</span>
+    <div class="right"><span class="starpill" title="⭐"><span class="emo">⭐</span>${totalStars()}</span><button class="coinpill" data-act="gifts" title="${esc(t('gifts'))}"><span class="emo">🪙</span><b id="coinN">${S.coins}</b><span class="emo gb">🎁</span></button>
     <button class="gear" data-act="settings" aria-label="${esc(t('settings'))}" title="${esc(t('settings'))}"><span class="emo">⚙️</span></button></div>
   </header>`;
 }
@@ -696,14 +940,15 @@ function renderTopic(){
 
 function cardHTML(c, i){
   const main = c.label ?? (c.w ? tr(c.w) : '');
-  const trs = (S.tr && c.w && !c.sentence) ? LANGS.filter(l => l !== S.lang).map(l => `<span class="trw" data-say="${esc(c.w[LANGS.indexOf(l)])}" data-l="${l}"><span class="emo">${flagEmoji(LFLAG[l])}</span>${esc(c.w[LANGS.indexOf(l)])}</span>`).join('') : '';
-  const sentTr = (S.tr && c.sentence) ? LANGS.filter(l => l !== S.lang).map(l => `<span class="trw" data-say="${esc(c.w[LANGS.indexOf(l)])}" data-l="${l}"><span class="emo">${flagEmoji(LFLAG[l])}</span>${esc(c.w[LANGS.indexOf(l)])}</span>`).join('') : '';
-  const chips = c.chips ? `<span class="chips ${c.sentence ? 'words' : ''}">${c.chips.map(ch => `<span class="chip" data-say="${esc(ch.say.toLowerCase())}" data-l="${S.lang}">${esc(ch.t)}</span>`).join(c.sentence ? '' : '<span class="dash">-</span>')}</span>` : '';
+  const trs = (S.tr && c.w) ? LANGS.filter(l => l !== S.lang).map(l => `<span class="trw" data-say="${esc(c.w[LANGS.indexOf(l)])}" data-l="${l}"><span class="emo">${flagEmoji(LFLAG[l])}</span><span>${rt(c.w[LANGS.indexOf(l)], l)}</span></span>`).join('') : '';
+  const sentTr = '';
+  const chipHTML = c.chips ? (c.sentence ? c.chips.map(ch => rt(ch.t)) : rtParts(c.chips.map(ch => ch.t))) : null;
+  const chips = c.chips ? `<span class="chips ${c.sentence ? 'words' : ''}">${c.chips.map((ch, k) => `<span class="chip" data-say="${esc(ch.say.toLowerCase())}" data-l="${S.lang}">${chipHTML[k]}</span>`).join(c.sentence ? '' : '<span class="dash">-</span>')}</span>` : '';
   const capital = c.capital ? `<span class="capline" data-say="${esc(tr(c.capital))}" data-l="${S.lang}"><span class="emo">🏙️</span>${esc(tr(c.capital))}</span>` : '';
-  const sub = c.sub ? `<span class="fact">${esc(tr(c.sub))}</span>` : '';
-  return `<div class="card ${c.wide ? 'wide' : ''} ${c.sentence ? 'sentcard' : ''}" role="button" tabindex="0" data-card="${i}">
+  const sub = c.sub ? `<span class="fact">${rt(tr(c.sub))}</span>` : '';
+  return `<div class="card ${c.wide ? 'wide' : ''} ${c.sentence ? 'sentcard' : ''} ${seenKey(c) && S.seen[seenKey(c)] ? '' : 'fresh'}" role="button" tabindex="0" data-card="${i}">
     <span class="cpic">${picHTML(c.pic)}</span>
-    ${chips || (main ? `<span class="lbl ${main.length > 10 ? 'long' : ''}">${c.small ? `<span class="emo">${c.small}</span>` : ''}${esc(main)}</span>` : '')}
+    ${chips || (main ? `<span class="lbl ${main.length > 10 ? 'long' : ''}">${c.small ? `<span class="emo">${c.small}</span>` : ''}<span>${rt(main)}</span></span>` : '')}
     ${capital}${sub}
     ${trs || sentTr ? `<span class="trs">${trs}${sentTr}</span>` : ''}
   </div>`;
@@ -719,7 +964,7 @@ function cardSay(c){
 function levelHead(tp, lv){
   const total = V_.qs ? V_.qs.length : 0;
   const prog = V_.phase === 'quiz' ? `<div class="prog" aria-label="progress">${Array.from({length: total}, (_, i) => `<i class="${i < V_.qi ? 'f' : ''} ${i === V_.qi ? 'now' : ''}"></i>`).join('')}</div>` : `<div class="lvtitle">${esc(t('level'))} ${V_.level + 1} · ${esc(tr(lv.t))}</div>`;
-  return `<div class="lvhead"><button class="close" data-act="topic" aria-label="${esc(t('back'))}">✕</button>${prog}<span class="emo tpe">${tp.e}</span></div>`;
+  return `<div class="lvhead"><button class="close" data-act="topic" aria-label="${esc(t('back'))}">✕</button>${prog}<span class="coinpill"><span class="emo">🪙</span><b id="coinN">${S.coins}</b></span></div>`;
 }
 
 function renderLearn(){
@@ -739,41 +984,44 @@ function startQuiz(){
 
 function renderQ(){
   const tp = TOPICS.find(x => x.id === V_.topic), lv = levelsOf(tp)[V_.level];
-  const q = V_.qs[V_.qi]; V_.lock = false; V_.built = [];
+  const q = V_.qs[V_.qi]; V_.lock = false; V_.built = []; V_.qm = 0;
   let body = '';
   if (q.build) {
     body = `<div class="qpic">${picHTML(q.pic)}</div>
       <div class="slots ${q.joiner === ' ' ? 'sentence' : ''}">${q.answer.map((_, i) => `<span class="slot" data-slot="${i}"></span>`).join('')}</div>
-      <div class="bank">${q.pieces.map((pc, i) => `<button class="piece" data-piece="${i}">${esc(pc)}</button>`).join('')}</div>`;
+      <div class="bank">${q.pieces.map((pc, i) => `<button class="piece" data-piece="${i}">${q.joiner === ' ' ? rt(pc) : esc(pc)}</button>`).join('')}</div>`;
   } else {
     body = (q.pic ? `<div class="qpic ${q.pic.text ? 'textpic' : ''}">${picHTML(q.pic)}${q.caption ? `<div class="caption">${esc(q.caption)}</div>` : ''}</div>` : '')
-      + `<div class="opts m-${q.mode} n${q.options.length} ${q.big ? 'bigtxt' : ''}">${q.options.map((o, i) => `<button class="opt" data-opt="${i}">${o.pic ? `<span class="opic">${picHTML(o.pic)}</span>` : ''}${o.label != null ? `<span class="olbl">${esc(o.label)}</span>` : ''}</button>`).join('')}</div>`;
+      + `<div class="opts m-${q.mode} n${q.options.length} ${q.big ? 'bigtxt' : ''}">${q.options.map((o, i) => `<button class="opt" data-opt="${i}">${o.pic ? `<span class="opic">${picHTML(o.pic)}</span>` : ''}${o.label != null ? `<span class="olbl">${rt(o.label)}</span>` : ''}</button>`).join('')}</div>`;
   }
   app().innerHTML = `<main class="wrap level quiz c${TCOL[tp.id]}">${levelHead(tp, lv)}
-    <div class="qprompt"><button class="spk" data-act="repeat" aria-label="🔊"><span class="emo">🔊</span></button><h2>${esc(q.prompt)}</h2>${q.hint ? `<button class="btn soft hintb" data-act="hint"><span class="emo">💡</span></button>` : ''}</div>
+    <div class="qprompt"><button class="spk" data-act="repeat" aria-label="🔊"><span class="emo">🔊</span></button><button class="spk slow" data-act="slow" aria-label="${esc(t('slowBtn'))}" title="${esc(t('slowBtn'))}"><span class="emo">🐢</span></button><h2>${rt(q.prompt)}</h2>${q.hint ? `<button class="btn soft hintb" data-act="hint"><span class="emo">💡</span></button>` : ''}</div>
     ${body}<div class="toast" id="toast"></div></main>`;
   setTimeout(() => speakQ(q), 250);
 }
-function speakQ(q){ speak(Array.isArray(q.speak) ? q.speak.map(x => [x[0], x[1] || S.lang]) : [[q.speak, S.lang]]); }
+function speakQ(q, slow){ speak(Array.isArray(q.speak) ? q.speak.map(x => [x[0], x[1] || S.lang]) : [[q.speak, S.lang]], { slow }); }
 
 function toast(msg, ok){ const el = $('#toast'); if (!el) return; el.textContent = msg; el.className = 'toast show ' + (ok ? 'ok' : 'no'); clearTimeout(toast._t); toast._t = setTimeout(() => el.className = 'toast', 1100); }
 
-function answered(ok, sayWord){
+function answered(ok, sayWord, el){
   const praise = pick(tr(UI.praise));
   if (ok) {
-    sfxOk(); confetti(40); toast(praise, true);
+    sfxOk(); toast(praise, true);
+    const r = (el || $('.qprompt')).getBoundingClientRect();
+    burst(r.left + r.width/2, r.top + r.height/2, 70); setTimeout(sfxPop, 120);
+    addCoins(V_.qm ? 5 : 10, el);
     speak([[praise, S.lang], ...(sayWord ? [[sayWord, S.lang]] : [])]);
     V_.lock = true;
     setTimeout(() => { V_.qi++; if (V_.qi >= V_.qs.length) finish(); else renderQ(); }, sayWord && sayWord.length > 25 ? 2600 : 1500);
   } else {
-    sfxNo(); V_.mist++; toast(t('tryAgain'), false); say(t('tryAgain'));
+    sfxNo(); V_.mist++; V_.qm++; toast(t('tryAgain'), false); say(t('tryAgain'));
   }
 }
 
 function onOpt(i, btn){
   if (V_.lock) return;
   const q = V_.qs[V_.qi], o = q.options[i];
-  if (o.ok) { btn.classList.add('right'); answered(true, o.sayAfter || o.say); }
+  if (o.ok) { btn.classList.add('right'); answered(true, o.sayAfter || o.say, btn); }
   else { btn.classList.add('wrong'); btn.disabled = true; answered(false); }
 }
 function onPiece(i, btn){
@@ -786,7 +1034,7 @@ function onPiece(i, btn){
   if (V_.built.length === q.answer.length) {
     const got = V_.built.map(k => q.pieces[k]);
     const slots = document.querySelectorAll('.slot');
-    if (got.join('|') === q.answer.join('|')) { slots.forEach(s => s.classList.add('right')); answered(true, q.full); }
+    if (got.join('|') === q.answer.join('|')) { slots.forEach(s => s.classList.add('right')); answered(true, q.full, $('.slots')); }
     else {
       slots.forEach(s => s.classList.add('wrong')); answered(false);
       V_.lock = true;
@@ -808,14 +1056,17 @@ function finish(){
   S.stars[k] = Math.max(S.stars[k] || 0, st); save();
   const tp = TOPICS.find(x => x.id === V_.topic), L = levelsOf(tp);
   const hasNext = V_.level + 1 < L.length;
-  sfxWin(); confetti(160);
+  sfxWin(); fireworks(9); confetti(120);
   const praise = pick(tr(UI.praise));
   speak([[t('done'), S.lang], [praise, S.lang]]);
   V_.phase = 'done';
+  const bonus = st * 10;
   app().innerHTML = `<main class="wrap level done c${TCOL[tp.id]}">
+    <div class="lvhead"><button class="close" data-act="topic" aria-label="${esc(t('back'))}">✕</button><span class="lvtitle"></span><span class="coinpill"><span class="emo">🪙</span><b id="coinN">${S.coins}</b></span></div>
     <div class="result">
       <div class="bigstars">${[1,2,3].map(n => `<span class="emo ${n <= st ? 'on' : 'off'}" style="--d:${n*0.18}s">⭐</span>`).join('')}</div>
       <h1>${esc(t('done'))}</h1><p class="praise">${esc(praise)}</p>
+      <p class="bonusline"><span class="emo">🪙</span> ${esc(t('bonus', {n: bonus}))}</p>
       ${!hasNext ? `<p>${esc(t('allDone'))}</p>` : ''}
       <div class="rbtns">
         <button class="btn soft" data-act="again"><span class="emo">🔁</span> ${esc(t('again'))}</button>
@@ -823,6 +1074,7 @@ function finish(){
         ${hasNext ? `<button class="btn big go" data-act="next">${esc(t('next'))} <span class="emo">▶️</span></button>` : `<button class="btn big go" data-act="home"><span class="emo">🏠</span></button>`}
       </div>
     </div></main>`;
+  setTimeout(() => { addCoins(bonus, $('.bonusline')); setTimeout(showGiftIfAny, 900); }, 700);
 }
 
 function openLevel(i){
@@ -844,10 +1096,12 @@ function renderSettings(){
     <h2 id="set-h"><span class="emo">👨‍👩‍👧</span> ${esc(t('settings'))}</h2>
     <label class="fld" for="set-name">${esc(t('childName'))}<input id="set-name" type="text" maxlength="24" value="${esc(S.name)}" autocomplete="off"></label>
     <label class="tgl" for="set-tr"><input id="set-tr" type="checkbox" ${S.tr ? 'checked' : ''}> ${esc(t('showTr'))}</label>
+    <label class="tgl" for="set-st"><input id="set-st" type="checkbox" ${S.stress ? 'checked' : ''}> <span>${esc(t('showStress'))} <span class="stdemo">(${rt('кошка, собака', 'ru')})</span></span></label>
     <label class="tgl" for="set-all"><input id="set-all" type="checkbox" ${S.all ? 'checked' : ''}> ${esc(t('unlock'))}</label>
     <label class="fld" for="set-rate">${esc(t('speed'))}<span class="rate"><small>${esc(t('slow'))}</small><input id="set-rate" type="range" min="0.6" max="1.15" step="0.05" value="${S.rate}"><small>${esc(t('fast'))}</small></span></label>
     <h3>${esc(t('voices'))}</h3>${LANGS.map(vsel).join('')}
-    <p class="note ${kv || kRec ? 'ok' : ''}">${kRec ? esc(t('kkRec', {n: kRec})) : kv ? esc(t('kkOk', {v: kv.name})) : esc(t('kkNote'))}</p>
+    <p class="note ${kv || kRec ? 'ok' : ''}">${kRec ? esc(t('kkRec', {n: kRec})) : kv ? esc(t('kkOk', {v: kv.name})) : esc(t('kkNote', {v: voiceFor('tr') ? t('viaTr') : t('viaRu')}))}</p>
+    ${kRec ? '' : `<p class="note">${esc(t('iosTip'))}</p>`}
     <div class="setbtns"><span id="resetzone"><button class="btn ghost danger" data-act="reset">${esc(t('reset'))}</button></span>
     <button class="btn go" data-act="closeset">${esc(t('close'))}</button></div></div>`;
   m.hidden = false;
@@ -856,6 +1110,7 @@ function closeSettings(){ settingsOpen = false; const m = $('#modal'); if (m) m.
 
 function rerender(){
   if (V_.screen === 'home') renderHome();
+  else if (V_.screen === 'gifts') renderGifts();
   else if (V_.screen === 'topic') renderTopic();
   else if (V_.screen === 'level') { if (V_.phase === 'learn') renderLearn(); else if (V_.phase === 'quiz') startQuiz(); else renderTopic(); }
 }
@@ -863,14 +1118,21 @@ function rerender(){
 /* ---------- events ---------- */
 document.addEventListener('pointerdown', unlockAudio, { once:false, capture:true });
 document.addEventListener('click', e => {
-  const el = e.target.closest('[data-act],[data-lang],[data-topic],[data-level],[data-card],[data-opt],[data-piece],[data-slot],[data-say],[data-test]');
+  const el = e.target.closest('[data-act],[data-lang],[data-topic],[data-level],[data-card],[data-opt],[data-piece],[data-slot],[data-say],[data-test],[data-sticker]');
   if (!el) return;
   unlockAudio();
   if (el.dataset.say != null) { e.stopPropagation(); el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 300); say(el.dataset.say, el.dataset.l); return; }
   if (el.dataset.lang) { S.lang = el.dataset.lang; save(); if (V_.screen === 'level') V_ = { screen:'topic', topic: V_.topic }; rerender(); greet(); return; }
   if (el.dataset.topic) { V_ = { screen:'topic', topic: el.dataset.topic }; renderTopic(); scrollTo(0,0); const tp = TOPICS.find(x => x.id === el.dataset.topic); say(tr(tp.name)); return; }
   if (el.dataset.level != null) { const i = +el.dataset.level; if (!unlocked(V_.topic, i)) { say(t('locked')); el.classList.add('shake'); setTimeout(() => el.classList.remove('shake'), 500); return; } openLevel(i); return; }
-  if (el.dataset.card != null) { const c = V_.cards[+el.dataset.card]; el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 300); speak(cardSay(c)); return; }
+  if (el.dataset.card != null) {
+    const ci = +el.dataset.card, c = V_.cards[ci]; el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 300);
+    const now = Date.now(), again = V_.lastCard === ci && now - V_.lastCardT < 4000; V_.lastCard = ci; V_.lastCardT = now;
+    speak(cardSay(c), { slow: again });
+    const k = seenKey(c);
+    if (k && !S.seen[k]) { S.seen[k] = 1; el.classList.remove('fresh'); const r = el.getBoundingClientRect(); burst(r.left + r.width/2, r.top + 40, 26, true); addCoins(1, el); }
+    return; }
+  if (el.dataset.sticker != null) { el.classList.add('pop'); setTimeout(() => el.classList.remove('pop'), 300); say(pick(tr(UI.praise))); return; }
   if (el.dataset.opt != null) return onOpt(+el.dataset.opt, el);
   if (el.dataset.piece != null) return onPiece(+el.dataset.piece, el);
   if (el.dataset.slot != null) return onSlot(+el.dataset.slot);
@@ -886,6 +1148,10 @@ document.addEventListener('click', e => {
   }
   else if (a === 'startquiz') { startQuiz(); scrollTo(0,0); }
   else if (a === 'repeat') speakQ(V_.qs[V_.qi]);
+  else if (a === 'slow') speakQ(V_.qs[V_.qi], true);
+  else if (a === 'gifts') { if (V_.screen !== 'gifts') V_ = { screen:'gifts', back: V_ }; renderGifts(); scrollTo(0,0); }
+  else if (a === 'giftsback') { V_ = V_.back && V_.back.screen !== 'level' ? V_.back : (V_.back && V_.back.topic ? { screen:'topic', topic: V_.back.topic } : { screen:'home' }); rerender(); }
+  else if (a === 'closegift') { $('#giftbox').hidden = true; showGiftIfAny(); }
   else if (a === 'hint') say(V_.qs[V_.qi].hint);
   else if (a === 'again') openLevel(V_.level);
   else if (a === 'next') openLevel(V_.level + 1);
@@ -901,6 +1167,7 @@ document.addEventListener('input', e => {
 document.addEventListener('change', e => {
   if (e.target.id === 'set-tr') { S.tr = e.target.checked; save(); }
   if (e.target.id === 'set-all') { S.all = e.target.checked; save(); }
+  if (e.target.id === 'set-st') { S.stress = e.target.checked; save(); renderSettings(); }
   if (e.target.dataset.voice) { S.voice[e.target.dataset.voice] = e.target.value; save(); renderSettings(); }
 });
 

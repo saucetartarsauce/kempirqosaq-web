@@ -1,6 +1,6 @@
 // Offline support for the website version (not used inside the Windows / iOS shells).
 // App files are cached on install; voice clips are cached the first time they play.
-const VERSION = 'kq-v1';
+const VERSION = 'kq-v1.2';
 const SHELL = [
   './', 'index.html', 'manifest.webmanifest',
   'css/fonts.css', 'css/base.css', 'css/app.css',
